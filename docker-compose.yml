@@ -1,0 +1,28 @@
+services:
+  backend:
+    build: ./backend
+    container_name: elinn-backend
+    environment:
+      # Fyll inn disse:
+      ELINN_USERNAME: "kystel"
+      ELINN_PASSWORD: "PASSORD"
+      ELINN_SYSTEM: ""   # hvis du har, ellers kan den stå tom
+      # Sync:
+      SYNC_INTERVAL_SECONDS: "60"   # hvor ofte vi henter oppdateringer
+      # Timezone for parsing:
+      TZ_NAME: "Europe/Oslo"
+    volumes:
+      - ./data:/data
+      - ./config/user_map.json:/config/user_map.json:ro
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+
+  frontend:
+    image: nginx:alpine
+    container_name: elinn-frontend
+    volumes:
+      - ./frontend:/usr/share/nginx/html:ro
+    ports:
+      - "8080:80"
+    restart: unless-stopped

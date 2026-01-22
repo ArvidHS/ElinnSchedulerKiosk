@@ -1,0 +1,641 @@
+<!doctype html>
+<html lang="no">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Ressursplan</title>
+  <style>
+    :root{
+      --bg:#0b0b0b; --panel:#111; --text:#eee; --muted:#aaa; --border:#222;
+      --leftw: 1fr;
+      --rightw: 420px;
+      --headerh: 54px;
+      --namecol: 190px;
+      --rowh: 58px;
+      --gap: 12px;
+    }
+    html,body{height:100%;margin:0;background:var(--bg);color:var(--text);}
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;}
+
+    .layout{
+      height:100%;
+      display:grid;
+      grid-template-columns: var(--leftw) var(--rightw);
+      gap: var(--gap);
+      padding: var(--gap);
+      box-sizing:border-box;
+    }
+    .card{
+      background:var(--panel);
+      border:1px solid var(--border);
+      border-radius:14px;
+      overflow:hidden;
+      box-shadow:0 8px 20px rgba(0,0,0,.35);
+      min-height:0;
+    }
+
+    /* TOP BAR */
+    .topbar{
+      height: var(--headerh);
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      padding: 0 14px;
+      border-bottom:1px solid var(--border);
+      gap: 12px;
+    }
+    .title{
+      font-weight:900;
+      font-size:18px;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+    .meta{
+      color:var(--muted);
+      font-size:13px;
+      white-space:nowrap;
+      font-weight:700;
+    }
+
+    /* LEFT: WEEK GRID */
+    .weekWrap{display:flex;flex-direction:column;min-height:0;}
+    .weekViewport{flex:1;min-height:0;overflow:hidden;} /* no scroll */
+    .weekGrid{
+      display:grid;
+      grid-template-columns: var(--namecol) repeat(7, 1fr);
+      border-top:1px solid var(--border);
+    }
+    .cell{
+      border-right:1px solid var(--border);
+      border-bottom:1px solid var(--border);
+      padding: 8px 8px;
+      box-sizing:border-box;
+      overflow:hidden;
+    }
+    .head{
+      position:sticky;
+      top:0;
+      z-index:2;
+      background:var(--panel);
+      font-weight:900;
+      color:var(--muted);
+      font-size:12px;
+      text-transform:uppercase;
+      letter-spacing:.4px;
+      padding: 10px 8px;
+    }
+    .nameCell{
+      font-weight:900;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      display:flex;
+      align-items:flex-start; /* viktig når rader blir høye */
+      padding: 8px 10px;
+    }
+
+    .dayCell{
+      padding: 6px 8px;
+    }
+
+    .evLine{
+      display:grid;
+      grid-template-columns: 44px 10px 1fr;
+      gap:8px;
+      align-items:flex-start;
+      padding: 2px 0;
+      font-size:12px;
+      font-weight:800;
+
+      /* ikke kutt linjer */
+      white-space:normal;
+    }
+
+    .evLine > div:last-child{
+      /* la teksten wrappe */
+      white-space:normal;
+      overflow:hidden; /* greit, men ikke ellipsis */
+    }
+
+    
+    .t{
+      color:var(--muted);
+      font-size:11px;
+      font-weight:900;
+    }
+    .dot{
+      width:10px;height:10px;border-radius:999px;background:#666;
+      box-shadow: 0 0 0 3px rgba(255,255,255,.04);
+    }
+    .more{
+      margin-top:4px;
+      font-size:11px;
+      color:var(--muted);
+      font-weight:900;
+    }
+
+    .weekFooter{
+      height: 42px;
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      padding: 0 14px;
+      border-top:1px solid var(--border);
+      color:var(--muted);
+      font-size:12px;
+      font-weight:800;
+    }
+
+    /* RIGHT: TODAY LIST (compact) */
+    .right{display:flex;flex-direction:column;min-height:0;}
+    .todayViewport{flex:1;min-height:0;overflow:hidden;} /* no scroll */
+    .todayList{padding: 10px 12px;}
+    .person{
+      border-bottom:1px solid var(--border);
+      padding: 10px 6px 12px;
+    }
+    .personTop{
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap:10px;
+      margin-bottom:6px;
+    }
+    .personName{
+      font-weight:900;
+      font-size:14px;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+    .badge{
+      color:var(--muted);
+      font-size:12px;
+      font-weight:800;
+      white-space:nowrap;
+    }
+    .task{
+      display:grid;
+      grid-template-columns: 50px 10px 1fr;
+      gap:10px;
+      align-items:center;
+      padding: 4px 0;
+    }
+    .taskTime{color:var(--muted);font-size:12px;font-weight:900;}
+    .taskTitle{
+      font-size:12px;
+      font-weight:900;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+    .hint{color:var(--muted);font-size:13px;font-weight:800;padding:14px;}
+
+    /* Make headers align visually */
+    .weekGrid .cell:last-child{border-right:none;}
+  </style>
+</head>
+<body>
+  <div class="layout">
+
+    <!-- LEFT: WEEK (BIG) -->
+    <div class="card weekWrap">
+      <div class="topbar">
+        <div class="title" id="weekTitle">Ukeplan</div>
+        <div class="meta" id="clock"></div>
+      </div>
+
+      <div class="weekViewport">
+        <div class="weekGrid" id="weekGrid"></div>
+      </div>
+
+      <div class="weekFooter">
+        <div id="weekRange">–</div>
+        <div id="weekPage">–</div>
+      </div>
+    </div>
+
+    <!-- RIGHT: TODAY (SMALL) -->
+    <div class="card right">
+      <div class="topbar">
+        <div class="title">I dag</div>
+        <div class="meta" id="todayPage">–</div>
+      </div>
+
+      <div class="todayViewport">
+        <div class="todayList" id="todayList">
+          <div class="hint">Laster…</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+<script>
+  // Browser can’t resolve docker DNS. Use same host as the page.
+  const BACKEND = `http://${window.location.hostname}:8000`;
+
+  // Week view limits
+  const WEEK_MAX_LINES_PER_CELL = 2;     // per ansatt per dag i uke-matrisen
+  const WEEK_ROTATE_SECONDS = 12;        // bytt “side” av ansatte automatisk
+
+  // Today list limits
+  const TODAY_TASKS_PER_PERSON = 3;      // per ansatt i høyre panel
+  const TODAY_ROTATE_SECONDS = 10;       // bytt “side” automatisk
+
+  // If many employees, we auto-page both panels (no scrolling)
+  let resources = [];
+  let nameById = new Map();
+
+  let weekPages = [];
+  let weekPageIndex = 0;
+
+  let todayPages = [];
+  let todayPageIndex = 0;
+
+  let cachedWeekEvents = [];
+  let cachedTodayEvents = [];
+
+  const weekGridEl = document.getElementById("weekGrid");
+  const weekRangeEl = document.getElementById("weekRange");
+  const weekPageEl = document.getElementById("weekPage");
+  const todayListEl = document.getElementById("todayList");
+  const todayPageEl = document.getElementById("todayPage");
+  const weekTitleEl = document.getElementById("weekTitle");
+
+  function pad(n){ return n<10 ? "0"+n : ""+n; }
+
+  function tick(){
+    const d = new Date();
+    document.getElementById("clock").textContent =
+      d.toLocaleDateString('nb-NO', { weekday:'long', day:'2-digit', month:'short', year:'numeric'}) +
+      "  " + pad(d.getHours()) + ":" + pad(d.getMinutes());
+
+    // auto refresh at day change
+    const cd = new Date(); cd.setHours(0,0,0,0);
+    if (!tick._last) tick._last = cd.getTime();
+    if (cd.getTime() !== tick._last) {
+      tick._last = cd.getTime();
+      loadAll().catch(console.error);
+    }
+  }
+  tick(); setInterval(tick, 10000);
+
+  function short(t, n){
+    t = (t ?? "").toString().trim().replace(/\s+/g,' ');
+    return t.length > n ? t.slice(0, n-1) + "…" : t;
+  }
+
+  function toHHMM(d){
+    return d.toLocaleTimeString('nb-NO', { hour:'2-digit', minute:'2-digit' });
+  }
+
+  function dayStart00(date){
+    const d = new Date(date);
+    d.setHours(0,0,0,0);
+    return d;
+  }
+  function dayEnd2359(date){
+    const d = new Date(date);
+    d.setHours(23,59,59,999);
+    return d;
+  }
+
+  function startOfWeekMonday(date){
+    const d = dayStart00(date);
+    const jsDay = d.getDay(); // 0=Sun..6=Sat
+    const diff = (jsDay === 0 ? -6 : 1 - jsDay); // to Monday
+    d.setDate(d.getDate() + diff);
+    return d;
+  }
+
+  function chunk(arr, size){
+    const out=[];
+    for(let i=0;i<arr.length;i+=size) out.push(arr.slice(i,i+size));
+    return out;
+  }
+
+  async function fetchJSON(url){
+    const res = await fetch(url);
+    if(!res.ok) throw new Error("HTTP " + res.status);
+    return await res.json();
+  }
+
+  async function fetchResources(){
+    resources = await fetchJSON(BACKEND + "/api/resources");
+    nameById = new Map(resources.map(r => [String(r.id), r.title]));
+  }
+
+  async function fetchEvents(startISO, endISO){
+    const url = new URL(BACKEND + "/api/events");
+    url.searchParams.set("start", startISO);
+    url.searchParams.set("end", endISO);
+    return await fetchJSON(url.toString());
+  }
+
+  function computeWeekPages(){
+    // Hvor mange rader får plass i venstre panel?
+    const vh = document.querySelector(".weekViewport").clientHeight || 600;
+    const rowh = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--rowh')) || 58;
+    const rowsPerPage = Math.max(6, Math.floor((vh - 48) / rowh));
+
+    // Hvor mange pages trenger vi (kapasitet i antall rader)?
+    const pageCount = Math.max(1, Math.ceil(resources.length / rowsPerPage));
+
+    // Vekt = antall events i uka per ansatt (jo høyere, jo “mer plan”)
+    const weightById = new Map();
+    for (const r of resources) weightById.set(String(r.id), 0);
+    for (const e of cachedWeekEvents) {
+      const rid = String(e.resourceId || "");
+      if (weightById.has(rid)) weightById.set(rid, weightById.get(rid) + 1);
+    }
+
+    // Sorter ansatte etter vekt (mest plan først)
+    const sorted = [...resources].sort((a,b) =>
+      (weightById.get(String(b.id)) - weightById.get(String(a.id)))
+      || (String(a.title || a.id)).localeCompare(String(b.title || b.id), 'nb')
+    );
+
+    // Lag tomme pages
+    const pages = Array.from({length: pageCount}, () => ({load: 0, items: []}));
+
+    // Fordel: legg neste ansatt på siden med lavest load som fortsatt har plass
+    for (const r of sorted) {
+      let best = -1;
+      let bestLoad = Infinity;
+
+      for (let i=0;i<pages.length;i++){
+        if (pages[i].items.length >= rowsPerPage) continue;
+        if (pages[i].load < bestLoad) {
+          bestLoad = pages[i].load;
+          best = i;
+        }
+      }
+
+      // fallback (skal nesten aldri trigge)
+      if (best === -1) best = 0;
+
+      pages[best].items.push(r);
+      pages[best].load += (weightById.get(String(r.id)) || 0);
+    }
+
+    weekPages = pages.map(p => p.items);
+    weekPageIndex = 0;
+  }
+
+
+  function computeTodayPages(persons){
+    const vh = document.querySelector(".todayViewport").clientHeight || 500;
+    // approx person card height
+    const approx = 72 + (TODAY_TASKS_PER_PERSON * 22);
+    const perPage = Math.max(4, Math.floor(vh / approx));
+    todayPages = chunk(persons, perPage);
+    todayPageIndex = 0;
+  }
+
+  function renderWeekPage(weekStart){
+    const page = weekPages[weekPageIndex] || [];
+
+    const days = [
+      {k:"Man", i:0},
+      {k:"Tir", i:1},
+      {k:"Ons", i:2},
+      {k:"Tor", i:3},
+      {k:"Fre", i:4},
+      {k:"Lør", i:5},
+      {k:"Søn", i:6}
+    ];
+
+    // group week events by resourceId and dayIndex (only for resources on this page)
+    const byRidDay = new Map(); // rid -> Array(7) of []
+    for (const r of page) {
+      byRidDay.set(String(r.id), Array.from({length:7}, ()=>[]));
+    }
+
+    for (const e of cachedWeekEvents) {
+      const rid = String(e.resourceId || "");
+      if (!byRidDay.has(rid)) continue;
+      const s = new Date(e.start);
+      const dayIdx = (s.getDay() + 6) % 7; // Mon=0..Sun=6
+      byRidDay.get(rid)[dayIdx].push(e);
+    }
+
+    for (const arr of byRidDay.values()) {
+      for (const list of arr) list.sort((a,b)=>new Date(a.start)-new Date(b.start));
+    }
+
+    // Build grid: header row + N resource rows
+    weekGridEl.innerHTML = "";
+
+    // Header row
+    weekGridEl.appendChild(makeCell("cell head", "Ansatt"));
+    for (const d of days) {
+      const dt = new Date(weekStart);
+      dt.setDate(dt.getDate() + d.i);
+      const label = `${d.k} ${dt.toLocaleDateString('nb-NO',{day:'2-digit',month:'short'})}`;
+      weekGridEl.appendChild(makeCell("cell head", label));
+    }
+
+    // Rows
+    for (const r of page) {
+      const lists = byRidDay.get(String(r.id)) || Array.from({length:7}, ()=>[]);
+
+      // row height = enough to show ALL events in the busiest day for this employee
+      let maxLines = 0;
+      for (let k=0;k<7;k++){
+        const cnt = (lists[k] || []).length;
+        if (cnt > maxLines) maxLines = cnt;
+      }
+      const rowHeight = Math.max(58, 18 * maxLines + 18); // px
+
+      // Name cell
+      const nc = makeNameCell(r.title || r.id);
+      nc.style.height = rowHeight + "px";
+      weekGridEl.appendChild(nc);
+
+      // Day cells (ALL events, no slice, no "+flere")
+      for (let i=0;i<7;i++){
+        const cell = document.createElement("div");
+        cell.className = "cell dayCell";
+        cell.style.height = rowHeight + "px";
+
+        const list = lists[i] || [];
+        for (const e of list){
+          const s = new Date(e.start);
+          const dotColor = e.backgroundColor || "#666";
+
+          const line = document.createElement("div");
+          line.className = "evLine";
+          line.innerHTML = `
+            <div class="t">${toHHMM(s)}</div>
+            <div class="dot" style="background:${dotColor}"></div>
+            <div>${(e.title || "").replaceAll("<","&lt;").replaceAll(">","&gt;")}</div>
+          `;
+          cell.appendChild(line);
+        }
+
+        weekGridEl.appendChild(cell);
+      }
+    }
+
+    weekPageEl.textContent = `${weekPageIndex+1}/${Math.max(1, weekPages.length)}`;
+  }
+
+
+  function renderTodayPage(){
+    const page = todayPages[todayPageIndex] || [];
+    todayListEl.innerHTML = "";
+
+    for (const p of page){
+      const wrap = document.createElement("div");
+      wrap.className = "person";
+
+      wrap.innerHTML = `
+        <div class="personTop">
+          <div class="personName">${short(p.name, 26)}</div>
+          <div class="badge">${p.all.length ? (p.all.length + " i dag") : "fri"}</div>
+        </div>
+      `;
+
+      if (p.shown.length === 0){
+        const empty = document.createElement("div");
+        empty.className = "hint";
+        empty.style.padding = "6px 0 2px";
+        empty.textContent = "Ingen oppdrag i dag";
+        wrap.appendChild(empty);
+      } else {
+        for (const e of p.shown){
+          const dotColor = e.backgroundColor || "#666";
+          const s = new Date(e.start);
+          const row = document.createElement("div");
+          row.className = "task";
+          row.innerHTML = `
+            <div class="taskTime">${toHHMM(s)}</div>
+            <div class="dot" style="background:${dotColor}"></div>
+            <div class="taskTitle">${short(e.title, 44)}</div>
+          `;
+          wrap.appendChild(row);
+        }
+      }
+
+      todayListEl.appendChild(wrap);
+    }
+
+    todayPageEl.textContent = `${todayPageIndex+1}/${Math.max(1, todayPages.length)}`;
+  }
+
+  function makeCell(cls, text){
+    const d = document.createElement("div");
+    d.className = cls + " cell";
+    d.textContent = text;
+    return d;
+  }
+
+  function makeNameCell(text){
+    const d = document.createElement("div");
+    d.className = "cell nameCell";
+    d.textContent = text;
+    return d;
+  }
+
+  async function loadAll(){
+    await fetchResources();
+
+    // Week window (this week, Mon->next Mon)
+    const now = new Date();
+    const ws = startOfWeekMonday(now);
+    const we = new Date(ws); we.setDate(we.getDate()+7);
+
+    const weekStartLabel = ws.toLocaleDateString('nb-NO',{day:'2-digit',month:'short'});
+    const weekEndLabel = new Date(ws.getTime() + 6*86400000).toLocaleDateString('nb-NO',{day:'2-digit',month:'short'});
+    weekRangeEl.textContent = `${weekStartLabel}–${weekEndLabel}`;
+    weekTitleEl.textContent = `Ukeplan • uke ${getISOWeek(now)}`;
+
+    cachedWeekEvents = await fetchEvents(ws.toISOString(), we.toISOString());
+    // Skjul ansatte uten noe planlagt i hele uka
+    const activeIds = new Set(
+      cachedWeekEvents
+        .map(e => String(e.resourceId || ""))
+        .filter(x => x && x !== "ukjent")
+    );
+
+    resources = resources.filter(r => activeIds.has(String(r.id)));
+    nameById = new Map(resources.map(r => [String(r.id), r.title]));
+
+
+    // Today window
+    const t0 = dayStart00(now);
+    const t1 = dayEnd2359(now);
+    cachedTodayEvents = await fetchEvents(t0.toISOString(), t1.toISOString());
+
+    // Build pages
+    computeWeekPages();
+    renderWeekPage(ws);
+
+    // Build today persons list for paging
+    const byRid = new Map();
+    for (const r of resources){
+      byRid.set(String(r.id), { id:String(r.id), name:r.title || String(r.id), all: [], shown: [] });
+    }
+    for (const e of cachedTodayEvents){
+      const rid = String(e.resourceId || "");
+      if (!byRid.has(rid)){
+        byRid.set(rid, { id:rid, name: nameById.get(rid) || rid, all: [], shown: [] });
+      }
+      byRid.get(rid).all.push(e);
+    }
+
+    const persons = Array.from(byRid.values())
+      .map(p => {
+        p.all.sort((a,b)=>new Date(a.start)-new Date(b.start));
+        const now2 = new Date();
+        const upcoming = p.all.filter(e => new Date(e.end) >= now2);
+        const base = upcoming.length ? upcoming : p.all;
+        p.shown = base.slice(0, TODAY_TASKS_PER_PERSON);
+        return p;
+      })
+      .sort((a,b)=>(a.name||a.id).localeCompare((b.name||b.id),'nb'));
+
+    computeTodayPages(persons);
+    renderTodayPage();
+
+    // reset page counters shown
+    weekPageEl.textContent = `${weekPageIndex+1}/${Math.max(1, weekPages.length)}`;
+    todayPageEl.textContent = `${todayPageIndex+1}/${Math.max(1, todayPages.length)}`;
+  }
+
+  function rotateWeek(){
+    if (weekPages.length <= 1) return;
+    weekPageIndex = (weekPageIndex + 1) % weekPages.length;
+    const ws = startOfWeekMonday(new Date());
+    renderWeekPage(ws);
+  }
+
+  function rotateToday(){
+    if (todayPages.length <= 1) return;
+    todayPageIndex = (todayPageIndex + 1) % todayPages.length;
+    renderTodayPage();
+  }
+
+  // ISO week number (so the title matches reality)
+  function getISOWeek(d){
+    const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+    const dayNum = date.getUTCDay() || 7;
+    date.setUTCDate(date.getUTCDate() + 4 - dayNum);
+    const yearStart = new Date(Date.UTC(date.getUTCFullYear(),0,1));
+    return Math.ceil((((date - yearStart) / 86400000) + 1) / 7);
+  }
+
+  // Load + auto refresh + auto rotate
+  loadAll().catch(err=>{
+    console.error(err);
+    todayListEl.innerHTML = `<div class="hint">Feil: ${short(String(err), 160)}</div>`;
+  });
+
+  setInterval(()=>loadAll().catch(console.error), 60000);
+  setInterval(rotateWeek, WEEK_ROTATE_SECONDS * 1000);
+  setInterval(rotateToday, TODAY_ROTATE_SECONDS * 1000);
+</script>
+</body>
+</html>
