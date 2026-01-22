@@ -253,6 +253,7 @@
 
   let cachedWeekEvents = [];
   let cachedTodayEvents = [];
+  let weekRowHeightById = new Map();
 
   const weekGridEl = document.getElementById("weekGrid");
   const weekRangeEl = document.getElementById("weekRange");
@@ -321,6 +322,27 @@
     return out;
   }
 
+  function getWeekMetrics(){
+    const weekViewport = document.querySelector(".weekViewport");
+    const weekWidth = weekViewport?.clientWidth || weekGridEl.clientWidth || 900;
+    const nameCol = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--namecol')) || 190;
+    const dayWidth = Math.max(80, (weekWidth - nameCol) / 7);
+    const padding = 16; // dayCell left+right padding
+    const timeCol = 44;
+    const dotCol = 10;
+    const gap = 16; // 2 gaps of 8px in evLine
+    const titleWidth = Math.max(40, dayWidth - padding - timeCol - dotCol - gap);
+    return { titleWidth };
+  }
+
+  function estimateLines(text, maxWidth, font){
+    const canvas = estimateLines._canvas || (estimateLines._canvas = document.createElement("canvas"));
+    const ctx = canvas.getContext("2d");
+    ctx.font = font;
+    const width = ctx.measureText(text || "").width || 0;
+    return Math.max(1, Math.ceil(width / maxWidth));
+  }
+
   async function fetchJSON(url){
     const res = await fetch(url);
     if(!res.ok) throw new Error("HTTP " + res.status);
@@ -341,9 +363,12 @@
 
   function computeWeekPages(){
     const vh = document.querySelector(".weekViewport").clientHeight || 600;
+    const { titleWidth } = getWeekMetrics();
+    const font = "800 12px system-ui,-apple-system,Segoe UI,Roboto,Arial";
+    const lineHeight = 16;
 
-    const rowHeightById = new Map();
-    for (const r of resources) rowHeightById.set(String(r.id), 58);
+    weekRowHeightById = new Map();
+    for (const r of resources) weekRowHeightById.set(String(r.id), 58);
 
     const eventsByRidDay = new Map();
     for (const r of resources) {
@@ -360,9 +385,13 @@
     for (const [rid, lists] of eventsByRidDay.entries()) {
       let maxLines = 0;
       for (const list of lists) {
-        if (list.length > maxLines) maxLines = list.length;
+        let dayLines = 0;
+        for (const e of list) {
+          dayLines += estimateLines(e.title || "", titleWidth, font);
+        }
+        if (dayLines > maxLines) maxLines = dayLines;
       }
-      rowHeightById.set(rid, Math.max(58, 18 * maxLines + 18));
+      weekRowHeightById.set(rid, Math.max(58, lineHeight * maxLines + 18));
     }
 
     // Vekt = antall events i uka per ansatt (jo høyere, jo “mer plan”)
@@ -384,7 +413,7 @@
     let currentHeight = 0;
 
     for (const r of sorted) {
-      const rowHeight = rowHeightById.get(String(r.id)) || 58;
+      const rowHeight = weekRowHeightById.get(String(r.id)) || 58;
       if (current.length && currentHeight + rowHeight > vh) {
         pages.push(current);
         current = [];
@@ -457,14 +486,7 @@
     // Rows
     for (const r of page) {
       const lists = byRidDay.get(String(r.id)) || Array.from({length:7}, ()=>[]);
-
-      // row height = enough to show ALL events in the busiest day for this employee
-      let maxLines = 0;
-      for (let k=0;k<7;k++){
-        const cnt = (lists[k] || []).length;
-        if (cnt > maxLines) maxLines = cnt;
-      }
-      const rowHeight = Math.max(58, 18 * maxLines + 18); // px
+      const rowHeight = weekRowHeightById.get(String(r.id)) || 58;
 
       // Name cell
       const nc = makeNameCell(r.title || r.id);
