@@ -71,7 +71,7 @@
       border-bottom:1px solid var(--border);
       padding: 8px 8px;
       box-sizing:border-box;
-      overflow:hidden;
+      overflow:visible;
     }
     .head{
       position:sticky;
@@ -115,7 +115,6 @@
     .evLine > div:last-child{
       /* la teksten wrappe */
       white-space:normal;
-      overflow:hidden; /* greit, men ikke ellipsis */
     }
 
     
@@ -165,9 +164,8 @@
     .personName{
       font-weight:900;
       font-size:14px;
-      white-space:nowrap;
-      overflow:hidden;
-      text-overflow:ellipsis;
+      white-space:normal;
+      word-break:break-word;
     }
     .badge{
       color:var(--muted);
@@ -186,9 +184,8 @@
     .taskTitle{
       font-size:12px;
       font-weight:900;
-      white-space:nowrap;
-      overflow:hidden;
-      text-overflow:ellipsis;
+      white-space:normal;
+      word-break:break-word;
     }
     .hint{color:var(--muted);font-size:13px;font-weight:800;padding:14px;}
 
@@ -285,6 +282,14 @@
   function short(t, n){
     t = (t ?? "").toString().trim().replace(/\s+/g,' ');
     return t.length > n ? t.slice(0, n-1) + "…" : t;
+  }
+
+  function escapeHTML(text){
+    return (text ?? "")
+      .toString()
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;");
   }
 
   function toHHMM(d){
@@ -388,7 +393,7 @@
   function computeTodayPages(persons){
     const vh = document.querySelector(".todayViewport").clientHeight || 500;
     // approx person card height
-    const approx = 72 + (TODAY_TASKS_PER_PERSON * 22);
+    const approx = 90 + (TODAY_TASKS_PER_PERSON * 32);
     const perPage = Math.max(4, Math.floor(vh / approx));
     todayPages = chunk(persons, perPage);
     todayPageIndex = 0;
@@ -451,14 +456,14 @@
 
       // Name cell
       const nc = makeNameCell(r.title || r.id);
-      nc.style.height = rowHeight + "px";
+      nc.style.minHeight = rowHeight + "px";
       weekGridEl.appendChild(nc);
 
       // Day cells (ALL events, no slice, no "+flere")
       for (let i=0;i<7;i++){
         const cell = document.createElement("div");
         cell.className = "cell dayCell";
-        cell.style.height = rowHeight + "px";
+        cell.style.minHeight = rowHeight + "px";
 
         const list = lists[i] || [];
         for (const e of list){
@@ -470,7 +475,7 @@
           line.innerHTML = `
             <div class="t">${toHHMM(s)}</div>
             <div class="dot" style="background:${dotColor}"></div>
-            <div>${(e.title || "").replaceAll("<","&lt;").replaceAll(">","&gt;")}</div>
+            <div>${escapeHTML(e.title || "")}</div>
           `;
           cell.appendChild(line);
         }
@@ -493,7 +498,7 @@
 
       wrap.innerHTML = `
         <div class="personTop">
-          <div class="personName">${short(p.name, 26)}</div>
+          <div class="personName">${escapeHTML(p.name)}</div>
           <div class="badge">${p.all.length ? (p.all.length + " i dag") : "fri"}</div>
         </div>
       `;
@@ -513,7 +518,7 @@
           row.innerHTML = `
             <div class="taskTime">${toHHMM(s)}</div>
             <div class="dot" style="background:${dotColor}"></div>
-            <div class="taskTitle">${short(e.title, 44)}</div>
+            <div class="taskTitle">${escapeHTML(e.title || "")}</div>
           `;
           wrap.appendChild(row);
         }
