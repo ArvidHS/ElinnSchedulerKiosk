@@ -1,2 +1,3 @@
 *.sql
 *.sqlite
+docker-compose.yml
